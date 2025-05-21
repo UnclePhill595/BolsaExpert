@@ -1,0 +1,207 @@
+<!-- index.html -->
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Ticker Quiz</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #111; color: #fff; text-align: center; padding: 20px; }
+    .container { max-width: 500px; margin: auto; }
+    .hidden { display: none; }
+    .question { font-size: 24px; margin-bottom: 20px; }
+    .options button { display: block; width: 100%; margin: 10px 0; padding: 10px; font-size: 18px; cursor: pointer; }
+    .score { font-size: 20px; margin-top: 20px; }
+    .timer { font-size: 18px; margin-bottom: 10px; }
+    .ranking { text-align: left; margin-top: 20px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Ticker Quiz</h1>
+
+    <div id="tela-nome">
+      <p>Digite seu nome:</p>
+      <input type="text" id="nome" placeholder="Seu nome"/>
+      <br><br>
+      <button onclick="iniciarJogo()">Começar</button>
+    </div>
+
+    <div id="quiz" class="hidden">
+      <div class="timer" id="timer">Tempo: 10s</div>
+      <div class="question" id="question">Qual empresa é o ticker: ?</div>
+      <div class="options" id="options"></div>
+      <div class="score" id="score">Pontuação: 0</div>
+    </div>
+
+    <div id="fim" class="hidden">
+      <h2>Fim de jogo!</h2>
+      <p id="pontuacao-final"></p>
+      <button onclick="reiniciarJogo()">Jogar Novamente</button>
+      <div class="ranking" id="ranking"></div>
+    </div>
+  </div>
+
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
+
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyD2UTbREYLcETSwHSdSMtihYOZx9ltzbd4",
+      authDomain: "bolsaexpert-2c4d4.firebaseapp.com",
+      databaseURL: "https://bolsaexpert-2c4d4-default-rtdb.firebaseio.com",
+      projectId: "bolsaexpert-2c4d4",
+      storageBucket: "bolsaexpert-2c4d4.appspot.com",
+      messagingSenderId: "1010853331237",
+      appId: "1:1010853331237:web:7783d3ef984d82cd61dacc"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+    const rankingRef = db.ref("ranking");
+
+    const data = [
+      { ticker: "PETR4", empresa: "Petrobras" },
+      { ticker: "VALE3", empresa: "Vale" },
+      { ticker: "ITUB4", empresa: "Itaú Unibanco" },
+      { ticker: "BBDC4", empresa: "Bradesco" },
+      { ticker: "ABEV3", empresa: "Ambev" },
+      { ticker: "BBAS3", empresa: "Banco do Brasil" },
+      { ticker: "WEGE3", empresa: "Weg" },
+      { ticker: "MGLU3", empresa: "Magazine Luiza" },
+      { ticker: "RENT3", empresa: "Localiza" },
+      { ticker: "JBSS3", empresa: "JBS" },
+      { ticker: "ELET3", empresa: "Eletrobras" },
+      { ticker: "SUZB3", empresa: "Suzano" },
+      { ticker: "RADL3", empresa: "Raia Drogasil" },
+      { ticker: "LREN3", empresa: "Lojas Renner" },
+      { ticker: "BRFS3", empresa: "BRF" },
+      { ticker: "GGBR4", empresa: "Gerdau" },
+      { ticker: "CSNA3", empresa: "CSN" },
+      { ticker: "HAPV3", empresa: "Hapvida" },
+      { ticker: "YDUQ3", empresa: "Yduqs" },
+      { ticker: "CIEL3", empresa: "Cielo" }
+    ];
+
+    let nomeUsuario = "";
+    let score = 0;
+    let currentTicker;
+    let timeLeft = 10;
+    let timerInterval;
+    let perguntasRespondidas = 0;
+    const totalPerguntas = 10;
+
+    function shuffle(array) {
+      for (let i = array.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+      }
+      return array;
+    }
+
+    window.iniciarJogo = () => {
+      nomeUsuario = document.getElementById("nome").value.trim();
+      if (!nomeUsuario) {
+        alert("Digite um nome válido.");
+        return;
+      }
+      document.getElementById("tela-nome").classList.add("hidden");
+      document.getElementById("quiz").classList.remove("hidden");
+      score = 0;
+      perguntasRespondidas = 0;
+      loadNextQuestion();
+    };
+
+    function startTimer() {
+      timeLeft = 10;
+      document.getElementById("timer").textContent = `Tempo: ${timeLeft}s`;
+      clearInterval(timerInterval);
+      timerInterval = setInterval(() => {
+        timeLeft--;
+        document.getElementById("timer").textContent = `Tempo: ${timeLeft}s`;
+        if (timeLeft <= 0) {
+          clearInterval(timerInterval);
+          showCorrectAnswer();
+        }
+      }, 1000);
+    }
+
+    function loadNextQuestion() {
+      if (perguntasRespondidas >= totalPerguntas) return finalizarJogo();
+
+      perguntasRespondidas++;
+      document.getElementById("options").innerHTML = "";
+      currentTicker = data[Math.floor(Math.random() * data.length)];
+      document.getElementById("question").textContent = `Qual empresa é o ticker: ${currentTicker.ticker}?`;
+
+      let options = [currentTicker.empresa];
+      while (options.length < 4) {
+        const option = data[Math.floor(Math.random() * data.length)].empresa;
+        if (!options.includes(option)) options.push(option);
+      }
+      options = shuffle(options);
+
+      options.forEach(opt => {
+        const btn = document.createElement("button");
+        btn.textContent = opt;
+        btn.onclick = () => checkAnswer(opt);
+        document.getElementById("options").appendChild(btn);
+      });
+
+      startTimer();
+    }
+
+    function checkAnswer(selected) {
+      clearInterval(timerInterval);
+      if (selected === currentTicker.empresa) {
+        score++;
+      }
+      document.getElementById("score").textContent = `Pontuação: ${score}`;
+      setTimeout(loadNextQuestion, 500);
+    }
+
+    function showCorrectAnswer() {
+      alert(`⏱️ Tempo esgotado! A resposta era: ${currentTicker.empresa}`);
+      setTimeout(loadNextQuestion, 500);
+    }
+
+    function finalizarJogo() {
+      document.getElementById("quiz").classList.add("hidden");
+      document.getElementById("fim").classList.remove("hidden");
+      document.getElementById("pontuacao-final").textContent = `Sua pontuação: ${score}`;
+
+      rankingRef.push({
+        nome: nomeUsuario,
+        pontuacao: score,
+        data: new Date().toISOString()
+      });
+
+      mostrarRanking();
+    }
+
+    function mostrarRanking() {
+      rankingRef.orderByChild("pontuacao").limitToLast(10).once("value", snapshot => {
+        const rankingEl = document.getElementById("ranking");
+        rankingEl.innerHTML = "<h3>Top 10 Jogadores</h3><ol></ol>";
+        const lista = rankingEl.querySelector("ol");
+        const dataArray = [];
+        snapshot.forEach(child => {
+          dataArray.push(child.val());
+        });
+        dataArray.reverse().forEach(entry => {
+          const li = document.createElement("li");
+          li.textContent = `${entry.nome}: ${entry.pontuacao}`;
+          lista.appendChild(li);
+        });
+      });
+    }
+
+    window.reiniciarJogo = () => {
+      document.getElementById("fim").classList.add("hidden");
+      document.getElementById("tela-nome").classList.remove("hidden");
+      document.getElementById("nome").value = "";
+    };
+  </script>
+</body>
+</html>
